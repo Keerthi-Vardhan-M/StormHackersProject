@@ -1,6 +1,26 @@
 Repo for Hackathon " Prompt and Prototype "
 
-# How to Run
+# Healthcare Helper 🏥
+
+A web app built for a hackathon to help people access health information easily.
+
+🌐 **Live:** [healthcare-helper-by-stormhackers.onrender.com](https://healthcare-helper-by-stormhackers.onrender.com)
+
+---
+
+## What it does
+
+- 🥗 Get a meal plan based on your health condition
+- 🧠 Bust common health myths with trusted sources
+- 💬 Connect with mental health support
+- 🎮 Learn medical terms through a quiz game
+- 🚨 Report school health emergencies
+- 🧘 Get yoga & breathing tips for your condition
+- 💊 Spot fake/counterfeit medicines
+
+---
+
+# How to Run Locally
 
 1. Install Python from https://python.org
    (During install, check "Add Python to PATH")
@@ -19,3 +39,7 @@ Repo for Hackathon " Prompt and Prototype "
 6. Open your browser and go to:
    http://127.0.0.1:5000
    or wherver your machine hosted it
+
+---
+
+Built by **StormHackers** using Python & Flask
