@@ -1,0 +1,416 @@
+from flask import Flask, render_template_string, request, redirect, url_for, session
+import random
+
+app = Flask(__name__)
+app.secret_key = 'hackathonsecretkey'
+reports = []
+counselor_requests = []
+
+# Quiz data for game
+QUIZ_QUESTIONS = [
+    {'term': 'Hypertension', 'definition': 'High blood pressure'},
+    {'term': 'Insulin', 'definition': 'Hormone regulating blood sugar'},
+    {'term': 'Antibiotic', 'definition': 'Medicine that fights bacteria'},
+    {'term': 'Vaccination', 'definition': 'Way to protect against disease'},
+    {'term': 'Allergy', 'definition': 'Immune reaction to harmless substance'},
+    {'term': 'BMI', 'definition': 'Body Mass Index'},
+    {'term': 'Asthma', 'definition': 'Chronic disease affecting the lungs'},
+    {'term': 'Cholesterol', 'definition': 'Fat-like substance found in blood'},
+    {'term': 'Depression', 'definition': 'Mental health disorder with persistent sadness'}
+]
+VISIBLE_MYTHS = [
+    {"myth": "You can get a cold from being cold.", "fact": "Colds are caused by viruses, not cold weather itself.", "source": "CDC"},
+    {"myth": "Antibiotics cure viral infections.", "fact": "Antibiotics only work on bacteria, not viruses (such as colds or flu).", "source": "Mayo Clinic"},
+    {"myth": "Vaccines cause autism.", "fact": "All major studies show no link between vaccines and autism.", "source": "WHO"},
+    {"myth": "Eating eggs increases heart disease risk.", "fact": "Eating moderate eggs does not increase risk for most people.", "source": "Harvard Health"},
+    {"myth": "Diabetics can't eat any fruit.", "fact": "Fruits can be part of a balanced diabetes diet if portions are controlled.", "source": "ADA"},
+    {"myth": "Mental illness is a sign of weakness.", "fact": "Mental illness is a medical condition—seeking help is a sign of strength.", "source": "NIMH"}
+]
+YOGA_SUGGESTIONS = {
+    "Diabetes": [
+        "Yoga helps manage blood sugar. Try Vajrasana, Dhanurasana, Pranayama (breathing exercises).",
+        "Tip: Avoid high-intensity workouts. Focus on daily gentle movement.",
+        "Practice: Kapalbhati, meditation for stress relief."
+    ],
+    "Hypertension": [
+        "Gentle yoga, meditation, and breathing help lower blood pressure.",
+        "Tip: Do deep breathing (Anulom Vilom, Bhramari). Avoid inverted poses.",
+        "Practice: Shavasana, guided relaxation for stress."
+    ],
+    "Anxiety": [
+        "Yoga reduces anxiety. Do Shavasana, Child's Pose, and slow breathing.",
+        "Tip: Practice mindfulness meditation 10 min/day.",
+        "Practice: Alternate nostril breathing (Nadi Shodhana)."
+    ],
+    "Asthma": [
+        "Breathing exercises strengthen lungs. Do Anulom Vilom, pursed lip breathing.",
+        "Tip: Avoid poses in dusty places. Stay hydrated.",
+        "Practice: Sukhasana (easy pose), focus on relaxed exhalation."
+    ],
+    "Back Pain": [
+        "Gentle stretching like Cat-Cow helps. Avoid heavy twists.",
+        "Tip: Consistent gentle yoga is safer than only stretching in pain.",
+        "Practice: Cobra Pose, Pelvic tilts, and mindful breathing."
+    ],
+    "None": [
+        "Yoga and breathing maintain overall wellness.",
+        "Tip: Mix strength, flexibility, and relaxation routines.",
+        "Practice: Surya Namaskar, guided meditation regularly."
+    ]
+}
+
+STYLE = """
+<style>
+body {font-family: 'Segoe UI', Arial, sans-serif; background: linear-gradient(120deg, #dbeafe 0%, #eef2ff 60%, #f7f1ff 100%); margin: 0;}
+nav {background: #2563eb; color: white; padding: 14px 0;
+    box-shadow: 0 2px 4px rgba(37,99,235,0.07); text-align: center; font-size: 19px; margin-bottom:24px;}
+nav a {display: inline-block; margin: 0 17px; color: #e0e7ff; font-weight: bold; text-decoration: none; transition: color 0.2s;}
+nav a:hover { color: #facc15; }
+h1, h2, h3, h4 { color: #312e81; }
+.container {max-width: 920px; margin: auto; background: white; border-radius: 18px; padding: 31px 29px 16px 29px;
+    box-shadow: 0 6px 32px rgba(0,0,0,0.10);}
+.flex-cards {display: flex; flex-wrap: wrap; justify-content: center; gap: 28px;}
+.card { background: linear-gradient(135deg, #e0e7ff 0%, #f9fafb 100%);
+    border-radius: 15px; box-shadow: 0 4px 18px rgba(37,99,235,0.09);padding: 24px 26px;width: 260px;margin-bottom:24px;transition: transform 0.12s;}
+.card:hover { transform: translateY(-4px);}
+input, select, textarea, button {font-size: 18px; padding: 7px 12px; margin-top: 8px; margin-bottom: 14px; border-radius: 8px;
+    border: 1px solid #aeb7f3; background: #f7fafd; width: 87%; display: block;}
+label { font-weight: 500; margin-top:6px; }
+button,input[type="submit"] {background: #2563eb; color: white; font-weight:bold; border:none;width: 125px; margin-top: 12px;
+    box-shadow:0 2px 5px #a7c7f8b8; transition: background 0.2s;cursor:pointer;}
+button:hover,input[type="submit"]:hover { background: #312e81;}
+ul {margin-top: 0;margin-bottom: 18px;}
+.myth-card {background:#f1f5f9; border-radius:11px; margin-bottom:16px; box-shadow:0 1px 9px #e0e7ff; padding:13px 16px;}
+footer {padding: 19px 0; background: #dbeafe; color: #312e81; text-align: center; font-size: 16px; margin-top: 41px;
+    border-radius: 0 0 18px 18px;}
+.motiv{ background: #2563eb; color: #fff; border-radius:15px; padding:13px 15px; font-size:21px; margin-bottom:18px;}
+.retry-btn{width:120px; display:inline-block;}
+@media(max-width:1000px){.container{margin:10px;}}
+@media(max-width:750px){
+    .flex-cards{ flex-direction:column; align-items:center;}
+    .card{ width:96vw;}
+    .container{padding:10px 6vw 10px 6vw;}
+}
+::-webkit-scrollbar {width: 8px; background: #fff;}
+::-webkit-scrollbar-thumb {background: #c7d2fe; border-radius: 8px;}
+</style>
+"""
+
+NAV = f"""<nav>
+<a href="/">Home</a>
+<a href="/fraud">Fake Medicines</a>
+<a href="/insurance">Cost/Insurance</a>
+<a href="/nutrition">Nutrition</a>
+<a href="/myths">Myth Busting</a>
+<a href="/mental">Mental Health</a>
+<a href="/quiz">Terms Game</a>
+<a href="/alert">School Alert</a>
+<a href="/yoga">Yoga Planner</a>
+</nav>"""
+
+FOOTER = """<footer>
+Made with ❤️ by Hackathon Team | Powered by Flask
+</footer>
+"""
+
+@app.route('/')
+def home():
+    LANDING = f"""
+    {STYLE}{NAV}
+    <div class="container">
+      <h1 style="font-size:2.7em; margin-bottom:0; text-align:center;">Healthcare Helper</h1>
+      <div style="font-size:1.4em; color:#312e81; background:#e0e7ff;
+      padding:9px 0 15px 0; border-radius:9px; margin-bottom:35px; text-align:center; letter-spacing:.5px;">
+        <i>to assist you anytime</i>
+      </div>
+      <div class="flex-cards">
+        <div class="card"><h3>Fake Medicines</h3>
+        <p>Learn about medicine scams, submit a report.</p>
+        <a href='/fraud'><button>Go</button></a></div>
+        <div class="card"><h3>Insurance Calculator</h3>
+        <p>Estimate your payment, learn key insurance words.</p>
+        <a href='/insurance'><button>Go</button></a></div>
+        <div class="card"><h3>Nutrition Tracker</h3>
+        <p>Input details, get a custom meal plan.</p>
+        <a href='/nutrition'><button>Go</button></a></div>
+        <div class="card"><h3>Myth Busting</h3>
+        <p>Get facts, bust myths, see trusted sources.</p>
+        <a href='/myths'><button>Go</button></a></div>
+        <div class="card"><h3>Mental Health Connect</h3>
+        <p>Find support for stress and depression.</p>
+        <a href='/mental'><button>Go</button></a></div>
+        <div class="card"><h3>Medical Terms Game</h3>
+        <p>Test your health vocabulary knowledge!</p>
+        <a href='/quiz'><button>Go</button></a></div>
+        <div class="card"><h3>School Alert</h3>
+        <p>Health emergency report demo.</p>
+        <a href='/alert'><button>Go</button></a></div>
+        <div class="card"><h3>Yoga/Breathing Planner</h3>
+        <p>Get recommended practices for common conditions.</p>
+        <a href='/yoga'><button>Go</button></a></div>
+      </div>
+      {FOOTER}
+    </div>
+    """
+    return LANDING
+
+@app.route('/fraud', methods=['GET', 'POST'])
+def fraud():
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Fake & Counterfeit Medicines</h2>
+    <ul>
+      <li><b>Watch for:</b> Packaging errors, typos, broken seals, missing info.</li>
+      <li><b>Buy only:</b> Licensed pharmacies or trusted sites.</li>
+      <li><b>If unsure:</b> Ask your pharmacist.</li>
+      <li><b>Don't buy:</b> From street vendors/social media ads.</li>
+      <li><b>Diabetes:</b> Always check for expiry date and official packaging.</li>
+    </ul>
+    <form method="POST" style="margin-bottom:34px;">
+      <label>Medicine name</label><input name="name" required>
+      <label>Where did you buy?</label><input name="place" required>
+      <label>What made you suspicious?</label><textarea name="reason" required></textarea>
+      <input type="submit" value="Report" style="width:170px;">
+    </form>
+    <h4>Recent Reports:</h4>
+    <ul>
+    {''.join([f"<li><b>{r['name']}</b> from {r['place']}: {r['reason']}</li>" for r in reports]) or "<li>No reports yet.</li>"}
+    </ul>
+    {FOOTER}
+    </div>
+    """
+    if request.method == 'POST':
+        reports.append({'name': request.form['name'], 'place': request.form['place'], 'reason': request.form['reason']})
+        return redirect(url_for('fraud'))
+    return page
+
+@app.route('/insurance', methods=['GET', 'POST'])
+def insurance():
+    payment_result = ''
+    if request.method == 'POST':
+        try:
+            bill = float(request.form['bill'])
+            coverage_percent = float(request.form['coverage']) / 100.0
+            deductible = float(request.form['deductible'])
+            after_deductible = max(0, bill - deductible)
+            user_pay = deductible + (after_deductible - after_deductible * coverage_percent)
+            payment_result = f"{round(min(bill, user_pay), 2)}"
+        except Exception:
+            payment_result = "Check your input values!"
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Insurance Cost Calculator</h2>
+    <div class="myth-card" style="margin-bottom:16px;">
+        <b>Simple Definitions:</b><br>
+        <b>Medical Bill:</b> Total hospital/doctor charges, in <span style="color:#2563eb">Rupees (₹)</span>.<br>
+        <b>Deductible Amount:</b> What you must pay yourself before insurance starts to pay.<br>
+        <b>Coverage Percentage:</b> Part of bill insurance pays (after deductible is paid).<br>
+        <b>Copay:</b> A small fixed fee you pay for each medical service (not shown in this calculator).<br>
+        <b>Out-of-Pocket Maximum:</b> Maximum you pay in one year; after this, insurance pays all.
+    </div>
+    <form method="POST" style="max-width:445px;">
+      <label>Medical Bill (₹)</label><input name="bill" type="number" step="0.01" required>
+      <label>Insurance Coverage (%)</label><input name="coverage" type="number" min="0" max="100" step="1" required>
+      <label>Deductible Amount (₹)</label><input name="deductible" type="number" step="0.01" required>
+      <input type="submit" value="Estimate" style="width:170px;">
+    </form>
+    {f"<div class='myth-card'><b>Your Estimated Payment: ₹{payment_result}</b></div>" if payment_result else ""}
+    {FOOTER}
+    </div>
+    """
+    return page
+
+@app.route('/nutrition', methods=['GET', 'POST'])
+def nutrition():
+    plan = ''
+    tips = ''
+    if request.method == 'POST':
+        age = int(request.form['age'])
+        gender = request.form['gender']
+        disease = request.form['disease']
+        if disease == 'Diabetes':
+            plan = "Low-sugar meals, lots of veggies. Avoid sweets, sugary drinks, and processed foods."
+            tips = "Eat whole grains, pulse, beans, and fiber-rich vegetables. Monitor blood sugar after meals."
+            if gender == 'Female' and age < 18:
+                tips += " Ensure good sources of iron and calcium."
+        elif disease == 'Hypertension':
+            plan = "Low salt, high potassium foods: bananas, oranges, leafy greens. Avoid fried/junk food."
+            tips = "Stay hydrated and exercise regularly. Monitor blood pressure."
+        elif disease == 'Obesity':
+            plan = "Lower calorie intake, avoid fried/snack foods, lean proteins, lots of vegetables."
+            tips = "Choose fruits over sweets. Aim for daily movement and portion control."
+        elif disease == 'High Cholesterol':
+            plan = "No fried foods, more oats/greens, avoid red meats, include good fats (nuts, seeds, olive oil)."
+            tips = "Walk at least 30 minutes daily. Prefer home-cooked food."
+        else:
+            if age < 13:
+                plan = "Balanced meals: dairy, fresh veggies, protein sources."
+                if gender == 'Female':
+                    tips = "Adolescent girls need extra iron (beetroot, spinach) and calcium."
+            elif age < 30:
+                plan = "Protein-rich meals, calcium, fresh fruits and vegetables."
+                tips = "Limit junk food. Include exercise."
+            else:
+                plan = "Balanced home-style food, reduce sugar and fats, more vegetables."
+                tips = "Regular check-ups are important. Stay hydrated."
+        tips += " Drink plenty of water with all diets."
+    NUTRITION_PAGE = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Nutrition Tracker</h2>
+    <form method="POST">
+      <label>Age</label><input name="age" type="number" required>
+      <label>Gender</label>
+      <select name="gender"><option>Male</option><option>Female</option></select>
+      <label>Disease</label>
+      <select name="disease">
+        <option>None</option><option>Diabetes</option><option>Hypertension</option>
+        <option>Obesity</option><option>High Cholesterol</option>
+      </select>
+      <input type="submit" value="Get Plan" style="width:170px;">
+    </form>
+    {f"<div class='myth-card'><b>Plan:</b> {plan}<br><b>Tips:</b> {tips}</div>" if plan else ''}
+    {FOOTER}
+    </div>
+    """
+    return NUTRITION_PAGE
+
+@app.route('/myths')
+def myths():
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Myth Busting: Health Facts</h2>
+    {''.join([f'<div class="myth-card"><b>Myth:</b> {m["myth"]}<br><b>Fact:</b> {m["fact"]}<br><em>Source: {m["source"]}</em></div>' for m in VISIBLE_MYTHS])}
+    <b>Only trust health info from CDC, WHO, or national health ministry!</b>
+    {FOOTER}
+    </div>
+    """
+    return page
+
+@app.route('/mental', methods=['GET', 'POST'])
+def mental():
+    confirm = None
+    motiv = ("You matter. Whatever you're feeling, you are not alone.<br>"
+             "Asking for help is strength—good things are ahead.<br>"
+             "Believe in yourself, progress starts with one step.")
+    if request.method == 'POST':
+        name = request.form['name']
+        email = request.form['email']
+        problem = request.form['problem']
+        counselor_requests.append({'name': name, 'email': email, 'problem': problem})
+        confirm = f"Thank you {name}! A caring counselor will reach out soon. (demo)"
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <div class='motiv'>{motiv}</div>
+    <h2>Mental Health Counselor Connector</h2>
+    <form method="POST">
+      <label>Your Name</label><input name="name" required>
+      <label>Email</label><input name="email" required>
+      <label>What do you want to discuss?</label><textarea name="problem" required></textarea>
+      <button type="submit">Get Support</button>
+    </form>
+    {f"<div class='myth-card'><b>{confirm}</b></div>" if confirm else ''}
+    <br><b>This is a demo: no live connections!</b>
+    {FOOTER}
+    </div>
+    """
+    return page
+
+@app.route('/quiz', methods=['GET', 'POST'])
+def quiz():
+    # Persist quiz state via session so user can retry wrong answers, or get next on correct
+    if 'q_idx' not in session or session.get('next') or request.method != 'POST':
+        session['q_idx'] = random.randint(0, len(QUIZ_QUESTIONS) - 1)
+        session['next'] = False
+    idx = session['q_idx']
+    q = QUIZ_QUESTIONS[idx]
+    choices = [q['definition']]
+    # Add two random other options
+    while len(choices) < 3:
+        c = random.choice([qq['definition'] for qq in QUIZ_QUESTIONS if qq != q])
+        if c not in choices:
+            choices.append(c)
+    random.shuffle(choices)
+    feedback = ''
+    show_next_btn = False
+    if request.method == 'POST':
+        ans = request.form['ans']
+        correct = request.form['correct']
+        if ans == correct:
+            feedback = "Correct! 🎉"
+            session['next'] = True
+            show_next_btn = True
+        else:
+            feedback = f"Incorrect. Try again!"
+            session['next'] = False
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Medical Terms Game</h2>
+    <form method="POST">
+      <label><b>What does "{q['term']}" mean?</b></label>
+      {''.join([f'<input type="radio" name="ans" value="{c}" required>{c}<br>' for c in choices])}
+      <input type="hidden" name="correct" value="{q['definition']}">
+      {"<button class='retry-btn' type='submit'>Try Again</button>" if not show_next_btn else ""}
+    </form>
+    {f"<div class='myth-card'><b>{feedback}</b></div>" if feedback else ""}
+    {('<form method=GET><button type=submit>Next Question</button></form>' if show_next_btn else '')}
+    {FOOTER}
+    </div>
+    """
+    # On GET after "Next Question", reset quiz
+    if request.method == 'GET':
+        session['next'] = False
+    return page
+
+@app.route('/alert', methods=['GET', 'POST'])
+def alert():
+    alert_sent = False
+    info = ""
+    if request.method == 'POST':
+        alert_sent = True
+        info = "<div class='myth-card'><b>We have alerted the school teams. Thank you!</b></div>"
+    page = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>School Health Alert System</h2>
+    <form method="POST">
+      <label>School Name or Code</label><input name="school" required>
+      <label>Type of Emergency (e.g. asthma, injury, epidemic)</label><input name="type" required>
+      <input type="submit" value="Send Alert" style="width:170px;">
+    </form>
+    {info}
+    {FOOTER}
+    </div>
+    """
+    return page
+
+@app.route('/yoga', methods=['GET', 'POST'])
+def yoga():
+    plan = ""
+    tips_html = ""
+    if request.method == 'POST':
+        goal = request.form['goal']
+        points = YOGA_SUGGESTIONS.get(goal, YOGA_SUGGESTIONS["None"])
+        plan = "<ul>" + "".join(f"<li>{p}</li>" for p in points) + "</ul>"
+        tips_html = f"<div class='myth-card'><b>Tips & Practices:</b>{plan}</div>"
+    YOGA_PAGE = f"""{STYLE}{NAV}
+    <div class="container">
+    <h2>Yoga & Breathing Planner</h2>
+    <form method="POST">
+      <label>Disease/Goal</label>
+      <select name="goal">
+        <option>None</option>
+        <option>Diabetes</option>
+        <option>Hypertension</option>
+        <option>Anxiety</option>
+        <option>Asthma</option>
+        <option>Back Pain</option>
+      </select>
+      <input type="submit" value="Show Practices" style="width:170px;">
+    </form>
+    {tips_html}
+    {FOOTER}
+    </div>
+    """
+    return YOGA_PAGE
+
+if __name__ == '__main__':
+    app.run(debug=True)
